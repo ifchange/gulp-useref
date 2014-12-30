@@ -3,8 +3,8 @@ var gutil = require('gulp-util'),
     through = require('through2'),
     useref = require('node-useref');
 
-module.exports = function () {
-    return through.obj(function (file, enc, cb) {
+module.exports = function() {
+    return through.obj(function(file, enc, cb) {
         if (file.isStream()) {
             this.emit('error', new gutil.PluginError('gulp-useref', 'Streaming not supported'));
             return cb();
@@ -25,7 +25,7 @@ module.exports = function () {
     });
 };
 
-module.exports.assets = function () {
+module.exports.assets = function() {
     var path = require('path'),
         vfs = require('vinyl-fs'),
         concat = require('gulp-concat'),
@@ -41,21 +41,21 @@ module.exports.assets = function () {
         unprocessed = 0,
         end = false;
 
-    var assets = through.obj(function (file, enc, cb) {
+    var assets = through.obj(function(file, enc, cb) {
         var output = useref(file.contents.toString());
         var assets = output[1];
 
-        types.forEach(function (type) {
+        types.forEach(function(type) {
             var files = assets[type];
             if (files) {
                 unprocessed += Object.keys(files).length;
             }
         });
 
-        types.forEach(function (type) {
+        types.forEach(function(type) {
             var files = assets[type];
             if (files) {
-                Object.keys(files).forEach(function (name) {
+                Object.keys(files).forEach(function(name) {
                     var src,
                         filepaths = files[name].assets;
 
@@ -81,13 +81,19 @@ module.exports.assets = function () {
                             searchPaths = braceExpandJoin(file.cwd, searchPaths);
                         }
 
-                        filepaths.forEach(function (filepath) {
+                        filepaths.forEach(function(filepath) {
                             var pattern,
                                 matches;
 
+                            if (opts.pathGrep) {
+                                filepath = opts.pathGrep.call(this, filepath, file, 'source');
+                            }
+
                             if (!isAbsoluteUrl(filepath)) {
                                 pattern = braceExpandJoin((searchPaths || file.base), filepath);
-                                matches = glob.sync(pattern, { nosort: true });
+                                matches = glob.sync(pattern, {
+                                    nosort: true
+                                });
                                 if (!matches.length) {
                                     matches.push(pattern);
                                 }
@@ -95,21 +101,26 @@ module.exports.assets = function () {
                             }
                         }, this);
 
-                        src = vfs.src(filenames, { base: file.base });
+                        src = vfs.src(filenames, {
+                            base: file.base
+                        });
 
-                        streams.forEach(function (stream) {
+                        streams.forEach(function(stream) {
                             src.pipe(stream);
                         });
 
+                        if (opts.pathGrep) {
+                            name = opts.pathGrep.call(this, name, file, 'dest');
+                        }
                         src
                             .pipe(gulpif(!opts.noconcat, concat(name)))
-                            .pipe(through.obj(function (newFile, enc, callback) {
+                            .pipe(through.obj(function(newFile, enc, callback) {
 
                                 this.push(newFile);
 
                                 callback(null, newFile);
                             }.bind(this)))
-                            .on('finish', function () {
+                            .on('finish', function() {
                                 if (--unprocessed === 0 && end) {
                                     this.emit('end');
                                 }
@@ -119,17 +130,21 @@ module.exports.assets = function () {
             }
         }, this);
 
-        restoreStream.write(file, cb);
+        restoreStream.write(file);
+        cb();
 
-    }, function () {
+    }, function() {
         end = true;
+        restoreStream.end();
         if (unprocessed === 0) {
             this.emit('end');
         }
     });
 
-    assets.restore = function () {
-        return restoreStream.pipe(through.obj(), { end: false });
+    assets.restore = function() {
+        return restoreStream.pipe(through.obj(), {
+            end: false
+        });
     };
 
     return assets;
