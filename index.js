@@ -1,6 +1,7 @@
 'use strict';
 var gutil = require('gulp-util'),
     through = require('through2'),
+    rebaseUrls = require('gulp-css-rebase-urls'),
     useref = require('node-useref');
 
 module.exports = function() {
@@ -112,7 +113,14 @@ module.exports.assets = function() {
                         if (opts.pathGrep) {
                             name = opts.pathGrep.call(this, name, file, 'dest');
                         }
+
                         src
+                            .pipe(type == 'css' ? rebaseUrls({
+                                root: path.join(opts.searchPath, path.dirname(name))
+                            }) : through.obj(function(file, enc, cb) {
+                                this.push(file);
+                                cb();
+                            }))
                             .pipe(gulpif(!opts.noconcat, concat(name)))
                             .pipe(through.obj(function(newFile, enc, callback) {
 
